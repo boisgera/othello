@@ -2,6 +2,7 @@ const std = @import("std");
 
 const stdout = std.io.getStdOut().writer();
 const stdin = std.io.getStdIn().reader();
+const expect = std.testing.expect;
 
 const State = enum {
     white,
@@ -102,4 +103,12 @@ pub fn main() !void {
             try board.promptPlay();
         }
     }
+}
+
+test "Board data not shared" {
+    const board_1 = Board.init();
+    var board_2 = Board.init();
+    board_2.set(0, 0, .black);
+    try expect(board_1.get(0, 0) == null);
+    try expect(&board_1.cells != &board_2.cells);
 }
