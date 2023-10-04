@@ -4,40 +4,34 @@ const stdout = std.io.getStdOut().writer();
 const stdin = std.io.getStdIn().reader();
 
 const State = enum {
-    none,
     white,
     black,
 };
 
-const Error = error{ ParseMoveError, InvalidMoveError };
-
 const XY = struct {
-    x: u8,
-    y: u8,
+    u8,
+    u8,
 };
 
 const Board = struct {
-    cells: [64]State = [_]State{.none} ** 64,
+    cells: [64]?State = .{null} ** 64,
+    turn: ?State = null,
 
     fn init() Board {
-        var board = Board{};
-        board.cells[27] = .white;
-        board.cells[28] = .black;
-        board.cells[35] = .black;
-        board.cells[36] = .white;
-        return board;
+        var self = Board{};
+        self.set(3, 3, .white);
+        self.set(4, 3, .black);
+        self.set(3, 4, .white);
+        self.set(4, 4, .black);
+        self.turn = .black;
+        return self;
     }
 
-    fn get(self: Board, x: u8, y: u8) State {
+    fn get(self: Board, x: u8, y: u8) ?State {
         return self.cells[y * 8 + x];
     }
 
-    fn set(self: *Board, x: u8, y: u8, state: State) !void {
-        var board = Board{};
-        _ = board;
-        if (self.get(x, y) != .none) {
-            return error.InvalidMoveError;
-        }
+    fn set(self: *Board, x: u8, y: u8, state: ?State) void {
         self.cells[y * 8 + x] = state;
     }
 
@@ -50,7 +44,7 @@ const Board = struct {
         if (x > 7 or y > 7) {
             return error.ParseMoveError;
         }
-        return XY{ .x = x, .y = y };
+        return .{ x, y };
     }
 
     fn display(self: Board) !void {
@@ -60,39 +54,52 @@ const Board = struct {
             try stdout.print("{d} ", .{x + 1});
             var y: u8 = 0;
             while (y < 8) : (y += 1) {
-                const index = y * 8 + x;
-                switch (self.cells[index]) {
-                    .none => try stdout.print("{s}", .{"- "}),
-                    .white => try stdout.print("{s}", .{"○ "}),
-                    .black => try stdout.print("{s}", .{"● "}),
+                if (self.get(x, y)) |state| {
+                    switch (state) {
+                        .white => try stdout.print("{s}", .{"○ "}),
+                        .black => try stdout.print("{s}", .{"● "}),
+                    }
+                } else {
+                    try stdout.print("{s}", .{"- "});
                 }
             }
             try stdout.print("{d}\n", .{x + 1});
         }
         try stdout.print("{s}", .{"  a b c d e f g h\n"});
     }
+
+    fn promptPlay(self: Board) !void {
+        try self.display();
+        try stdout.print("\n", .{});
+        if (self.turn) |state| {
+            try stdout.print("Turn: {s}\n\n", .{@tagName(state)});
+        }
+        try stdout.print("Enter move: ", .{});
+    }
 };
+
+// TODO: test several board & shared data or not (default values)
 
 pub fn main() !void {
     var board = Board.init();
     var buffer: [1024]u8 = undefined;
 
     while (true) {
-        try board.display();
-        try stdout.print("\n", .{});
-        try stdout.print("Turn: ●\n", .{});
-        try stdout.print("\n", .{});
-        try stdout.print("Enter move: ", .{});
+        // TODO: split display & promptPlay
+        try board.promptPlay();
 
-        var xy: ?XY = null;
-        while (xy == null) {
+        while (true) {
             const move = try stdin.readUntilDelimiter(&buffer, '\n');
-            xy = Board.parseMove(move) catch {
+            const xy = Board.parseMove(move) catch {
                 try stdout.print("Invalid move, try again: ", .{});
                 continue;
             };
+            if (board.get(xy[0], xy[1])) |_| {
+                try stdout.print("Invalid move, try again: ", .{});
+                continue;
+            }
+            board.set(xy[0], xy[1], .black);
+            try board.promptPlay();
         }
-        try board.set(xy.?.x, xy.?.y, .black);
-        try stdout.print("\n", .{});
     }
 }
