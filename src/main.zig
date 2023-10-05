@@ -1,8 +1,16 @@
+// TODO:
+//   - switch turn if one player can't play,
+//   - implement end of game
+//   - implement/show possible moves
+
 const std = @import("std");
 
 const stdout = std.io.getStdOut().writer();
 const stdin = std.io.getStdIn().reader();
 const expect = std.testing.expect;
+
+var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+const allocator = gpa.allocator();
 
 const State = enum {
     white,
@@ -37,13 +45,11 @@ const Board = struct {
     }
 
     fn flip(self: *Board, x: u8, y: u8, state: State) !std.ArrayList(XY) {
-        var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-        const allocator = gpa.allocator();
         var results = std.ArrayList(XY).init(allocator);
         if (self.get(x, y)) |_| {
             return results;
         }
-        try results.append(.{ x, y }); // Oops, we have to remove it if we fail
+        try results.append(.{ x, y });
         const directions: [8]struct { i8, i8 } = .{ .{ 0, -1 }, .{ 1, -1 }, .{ 1, 0 }, .{ 1, 1 }, .{ 0, 1 }, .{ -1, 1 }, .{ -1, 0 }, .{ -1, -1 } };
         for (directions) |d| {
             var current = .{ @as(i16, x), @as(i16, y) };
@@ -66,6 +72,9 @@ const Board = struct {
                     break;
                 }
             }
+        }
+        if (results.items.len == 1) {
+            try results.resize(0);
         }
         return results;
     }
