@@ -1,7 +1,9 @@
 // TODO:
-//   - switch turn if one player can't play,
-//   - implement end of game
+//   x switch turn if one player can't play,
+//   x implement end of game
 //   - implement/show possible moves
+
+//
 
 const std = @import("std");
 
@@ -36,6 +38,31 @@ const Board = struct {
         return self;
     }
 
+    fn switchTurn(self: *Board) void {
+        if (self.turn == .black) {
+            self.turn = .white;
+        } else {
+            self.turn = .black;
+        }
+    }
+
+    fn possibleMoves(self: Board) std.ArrayList(XY) {
+        var results = std.ArrayList(XY).init(allocator);
+        var y: u8 = 0;
+        while (y < 8) : (y += 1) {
+            var x: u8 = 0;
+            while (x < 8) : (x += 1) {
+                if (self.get(x, y)) |_| {
+                    continue;
+                }
+                if (self.flip(x, y, self.turn).items.len > 0) {
+                    results.append(.{ x, y }) catch unreachable;
+                }
+            }
+        }
+        return results;
+    }
+
     fn get(self: Board, x: u8, y: u8) ?State {
         return self.cells[x + y * 8];
     }
@@ -44,12 +71,12 @@ const Board = struct {
         self.cells[x + y * 8] = state;
     }
 
-    fn flip(self: *Board, x: u8, y: u8, state: State) !std.ArrayList(XY) {
+    fn flip(self: *const Board, x: u8, y: u8, state: State) std.ArrayList(XY) {
         var results = std.ArrayList(XY).init(allocator);
         if (self.get(x, y)) |_| {
             return results;
         }
-        try results.append(.{ x, y });
+        results.append(.{ x, y }) catch unreachable;
         const directions: [8]struct { i8, i8 } = .{ .{ 0, -1 }, .{ 1, -1 }, .{ 1, 0 }, .{ 1, 1 }, .{ 0, 1 }, .{ -1, 1 }, .{ -1, 0 }, .{ -1, -1 } };
         for (directions) |d| {
             var current = .{ @as(i16, x), @as(i16, y) };
@@ -62,10 +89,10 @@ const Board = struct {
                 }
                 if (self.get(@intCast(current[0]), @intCast(current[1]))) |s| {
                     if (s != state) {
-                        try candidates.append(.{ @intCast(current[0]), @intCast(current[1]) });
+                        candidates.append(.{ @intCast(current[0]), @intCast(current[1]) }) catch unreachable;
                         continue;
                     } else {
-                        try results.appendSlice(candidates.items);
+                        results.appendSlice(candidates.items) catch unreachable;
                         break;
                     }
                 } else {
@@ -74,7 +101,7 @@ const Board = struct {
             }
         }
         if (results.items.len == 1) {
-            try results.resize(0);
+            results.resize(0) catch unreachable;
         }
         return results;
     }
@@ -104,7 +131,11 @@ const Board = struct {
                         .black => try stdout.print("{s}", .{"● "}),
                     }
                 } else {
-                    try stdout.print("{s}", .{"· "});
+                    if (self.flip(x, y, self.turn).items.len > 0) {
+                        try stdout.print("{s}", .{"◉ "});
+                    } else {
+                        try stdout.print("{s}", .{"· "});
+                    }
                 }
             }
             try stdout.print("{d}\n", .{y + 1});
@@ -136,7 +167,7 @@ pub fn main() !void {
                 try stdout.print("Invalid move, try again: ", .{});
                 continue;
             };
-            const flips = try board.flip(xy[0], xy[1], board.turn);
+            const flips = board.flip(xy[0], xy[1], board.turn);
             if (flips.items.len == 0) {
                 try stdout.print("Invalid move, try again: ", .{});
                 continue;
@@ -145,10 +176,15 @@ pub fn main() !void {
                 for (flips.items) |xy_| {
                     board.set(xy_[0], xy_[1], board.turn);
                 }
-                if (board.turn == .black) {
-                    board.turn = .white;
-                } else {
-                    board.turn = .black;
+                board.switchTurn();
+                if (board.possibleMoves().items.len == 0) {
+                    try stdout.print("No possible moves, turn skipped\n\n", .{});
+                    board.switchTurn();
+                }
+                if (board.possibleMoves().items.len == 0) {
+                    try stdout.print("No possible moves, game over!!!\n\n", .{});
+                    // TODO: print stats ?
+                    return;
                 }
                 try board.promptPlay();
             }
